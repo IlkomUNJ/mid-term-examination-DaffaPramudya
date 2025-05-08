@@ -352,4 +352,100 @@ impl BstNode {
             Some(x) => Some(x.upgrade().unwrap()),
         }
     }
+
+    fn count_nodes(&self) -> i32 {
+        let mut count = 1; 
+        if let Some(left) = &self.left {
+            count += left.borrow().count_nodes(); 
+        }
+        if let Some(right) = &self.right {
+            count += right.borrow().count_nodes();
+        }
+        count
+    }
+
+    pub fn add_node(&self, target_node: &BstNodeLink, value: i32) -> bool {
+        if let Some(found_node) = self.tree_search(&target_node.borrow().key.unwrap()) {
+            if BstNode::is_nil(&found_node.borrow().left) {
+                found_node.borrow_mut().add_left_child(&found_node, value);
+                return true;
+            } else if BstNode::is_nil(&found_node.borrow().right) {
+                found_node.borrow_mut().add_right_child(&found_node, value);
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn tree_predecessor(node: &BstNodeLink) -> Option<BstNodeLink> {
+        if let Some(left_node) = &node.borrow().left {
+            return Some(left_node.borrow().maximum());
+        }
+        let mut current = node.clone();
+        let mut parent = BstNode::upgrade_weak_to_strong(current.borrow().parent.clone());
+        while let Some(p) = parent {
+            if let Some(right_child) = &p.borrow().right {
+                if BstNode::is_node_match(right_child, &current) {
+                    return Some(p.clone());
+                }
+            }
+            current = p.clone();
+            parent = BstNode::upgrade_weak_to_strong(current.borrow().parent.clone());
+        }
+        None
+    }
+
+    pub fn median(&self) -> BstNodeLink {
+        let mut count = 0;
+        let total_nodes = self.count_nodes();
+        let median_index = (total_nodes + 1) / 2;
+
+        fn inorder_traverse(
+            node: &Option<BstNodeLink>,
+            current_index: &mut i32,
+            target_index: i32,
+        ) -> Option<BstNodeLink> {
+            if let Some(n) = node {
+                if let Some(result) = inorder_traverse(&n.borrow().left, current_index, target_index) {
+                    return Some(result);
+                }
+                *current_index += 1;
+                if *current_index == target_index {
+                    return Some(n.clone());
+                }
+                if let Some(result) = inorder_traverse(&n.borrow().right, current_index, target_index) {
+                    return Some(result);
+                }
+            }
+            None
+        }
+
+        inorder_traverse(&Some(self.get_bst_nodelink_copy()), &mut count, median_index).unwrap()
+    }
+
+    pub fn tree_rebalance(node: &BstNodeLink) -> BstNodeLink {
+        let median_node = node.borrow().median();
+    
+        let new_root = BstNode::new_bst_nodelink(median_node.borrow().key.unwrap());
+    
+        fn insert_all_except(
+            current: &Option<BstNodeLink>,
+            new_tree: &BstNodeLink,
+            skip_node: &BstNodeLink,
+        ) {
+            if let Some(node) = current {
+                insert_all_except(&node.borrow().left, new_tree, skip_node);
+    
+                if !BstNode::is_node_match(node, skip_node) {
+                    BstNode::tree_insert(&Some(new_tree.clone()), &node.borrow().key.unwrap());
+                }
+    
+                insert_all_except(&node.borrow().right, new_tree, skip_node);
+            }
+        }
+    
+        insert_all_except(&Some(node.clone()), &new_root, &median_node);
+    
+        new_root
+    }
 }
